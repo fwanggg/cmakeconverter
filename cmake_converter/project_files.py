@@ -25,6 +25,8 @@
      Manages the recovery of project files
 """
 
+import os
+
 from cmake_converter.message import send
 
 
@@ -33,9 +35,6 @@ class ProjectFiles(object):
         Class who collect and store project files
     """
 
-    c_folder_nb = 1
-    h_folder_nb = 1
-
     def __init__(self, data):
         self.tree = data['vcxproj']['tree']
         self.ns = data['vcxproj']['ns']
@@ -43,45 +42,46 @@ class ProjectFiles(object):
         self.cppfiles = self.tree.xpath('//ns:ClCompile', namespaces=self.ns)
         self.headerfiles = self.tree.xpath('//ns:ClInclude', namespaces=self.ns)
         self.language = []
+        self.sources = {}
+        self.headers = {}
 
-    def write_files_variables(self):
+    def collects_source_files(self, references=False):
         """
         Write the project variables in CMakeLists.txt file
 
+        :param references: if this project is a reference of another, add one level to path (../)
+        :type references: bool
         """
 
         # Cpp Dir
-        known_cpp = []
-        ProjectFiles.c_folder_nb = 1
-        self.cmake.write('# Folders files\n')
         for cpp in self.cppfiles:
             if cpp.get('Include') is not None:
                 cxx = str(cpp.get('Include'))
+                cxx = '/'.join(cxx.split('\\'))
                 if not cxx.rpartition('.')[-1] in self.language:
                     self.language.append(cxx.rpartition('.')[-1])
-                current_cpp = '/'.join(cxx.split('\\')[0:-1])
-                if current_cpp not in known_cpp:
-                    if not current_cpp:
-                        # Case files are beside the VS Project
-                        current_cpp = './'
-                    known_cpp.append(current_cpp)
-                    self.cmake.write(
-                        'set(CPP_DIR_%s %s)\n' % (str(ProjectFiles.c_folder_nb), current_cpp)
-                    )
-                    ProjectFiles.c_folder_nb += 1
+                cpp_path, cxx_file = os.path.split(cxx)
+                if not cpp_path:
+                    # Case files are beside the VS Project
+                    cpp_path = './'
+                if references:
+                    cpp_path = '../' + cpp_path
+                if cpp_path not in self.sources:
+                    self.sources = {cpp_path: []}
+                if cxx_file not in self.sources[cpp_path]:
+                    self.sources[cpp_path].append(cxx_file)
 
         # Headers Dir
-        known_headers = []
-        ProjectFiles.h_folder_nb = 1
         for header in self.headerfiles:
             h = str(header.get('Include'))
-            current_header = '/'.join(h.split('\\')[0:-1])
-            if current_header not in known_headers:
-                known_headers.append(current_header)
-                self.cmake.write(
-                    'set(HEADER_DIR_%s %s)\n' % (str(ProjectFiles.h_folder_nb), current_header)
-                )
-                ProjectFiles.h_folder_nb += 1
+            h = '/'.join(h.split('\\'))
+            header_path, header_file = os.path.split(h)
+            if references:
+                header_path = '../' + header_path
+            if header_path not in self.headers:
+                self.headers = {header_path: []}
+            if header_file not in self.headers[header_path]:
+                self.headers[header_path].append(header_file)
 
         send("C++ Extensions found: %s" % self.language, 'INFO')
 
@@ -91,20 +91,26 @@ class ProjectFiles(object):
 
         """
 
-        self.cmake.write('################ Files ################\n'
-                         '#   --   Add files to project.   --   #\n'
-                         '#######################################\n\n')
-        self.cmake.write('file(GLOB SRC_FILES\n')
-        c = 1
-        while c < ProjectFiles.c_folder_nb:
-            for lang in self.language:
-                self.cmake.write('    ${CPP_DIR_' + str(c) + '}/*.%s\n' % lang)
-            c += 1
-        h = 1
-        while h < ProjectFiles.h_folder_nb:
-            self.cmake.write('    ${HEADER_DIR_' + str(h) + '}/*.h\n')
-            h += 1
-        self.cmake.write(')\n\n')
+        self.cmake.write('\n############ Source Files #############\n')
+        self.cmake.write('set(SRC_FILES\n')
+
+        for src_dir in self.sources:
+            for src_file in self.sources[src_dir]:
+                self.cmake.write('    %s\n' % os.path.join(src_dir, src_file))
+
+        self.cmake.write(')\n')
+
+        self.cmake.write('source_group("Sources" FILES ${SRC_FILES})\n\n')
+
+        self.cmake.write('\n############ Header Files #############\n')
+        self.cmake.write('set(HEADERS_FILES\n')
+
+        for hdrs_dir in self.headers:
+            for header_file in self.headers[hdrs_dir]:
+                self.cmake.write('    %s\n' % os.path.join(hdrs_dir, header_file))
+
+        self.cmake.write(')\n')
+        self.cmake.write('source_group("Headers" FILES ${HEADERS_FILES})\n\n')
 
     def add_additional_code(self, file_to_add):
         """
@@ -116,7 +122,7 @@ class ProjectFiles(object):
 
         if file_to_add != '':
             try:
-                fc = open(file_to_add, 'r')
+                fc = open(file_to_add)
                 self.cmake.write('############# Additional Code #############\n')
                 self.cmake.write('# Provides from external file.            #\n')
                 self.cmake.write('###########################################\n\n')
@@ -151,5 +157,5 @@ class ProjectFiles(object):
             self.cmake.write('# Add executable to build.\n')
             self.cmake.write('add_executable(${PROJECT_NAME} \n')
             send('CMake will build an EXECUTABLE.', '')
-        self.cmake.write('   ${SRC_FILES}\n')
+        self.cmake.write('   ${SRC_FILES} ${HEADERS_FILES}\n')
         self.cmake.write(')\n\n')

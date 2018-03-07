@@ -26,8 +26,37 @@
 """
 
 import argparse
+import re
+import os
 
 from cmake_converter.data_converter import DataConverter
+
+
+def convert_project(data, vcxproj, cmake_dest_dir, references=False):
+    """
+    Convert a ``vcxproj`` to a ``CMakeLists.txt``
+
+    :param data: input data of user
+    :type data: dict
+    :param vcxproj: input vcxproj
+    :type vcxproj: str
+    :param references: input vcxproj
+    :param cmake_dest_dir: destinaton folder of CMakeLists.txt
+    :type cmake_dest_dir: str
+    """
+
+    # Give data to DataConverter()
+    data_converter = DataConverter(data)
+    data_converter.init_files(vcxproj, cmake_dest_dir)
+    data_converter.create_data(references)
+
+    # Close CMake file
+    data_converter.close_cmake_file()
+
+    # If the current VS Project had references, create the corresponding CMakeLists
+    if data_converter.referenced_projs:
+        for proj in data_converter.referenced_projs:
+            convert_project(data, proj['vcxproj'], proj['cmake'], references=True)
 
 
 def main():  # pragma: no cover
@@ -44,7 +73,7 @@ def main():  # pragma: no cover
         'dependencies': None,
         'cmake_output': None,
         'data': None,
-        'std': None
+        'std': None,
     }
 
     usage = "cmake-converter -p <vcxproj> [-c | -a | -D | -O | -i | -std]"
@@ -52,6 +81,11 @@ def main():  # pragma: no cover
     parser = argparse.ArgumentParser(
         usage=usage,
         description='Convert Visual Studio projects (.vcxproj) to CMakeLists.txt'
+    )
+    parser.add_argument(
+        '-s', '--solution',
+        help='valid solution file. i.e.: ../../my.sln',
+        dest='solution'
     )
     parser.add_argument(
         '-p', '--project',
@@ -94,12 +128,12 @@ def main():  # pragma: no cover
     args = parser.parse_args()
 
     # Prepare data
-    if not args.project:
+    if not args.project and not args.solution:
         parser.print_help()
         exit(0)
 
     data['additional_code'] = args.additional
-    if args.dependencies is not None:
+    if args.dependencies:
         data['dependencies'] = args.dependencies.split(':')
     data['cmake_output'] = args.cmakeoutput
     data['includes'] = args.include
@@ -107,13 +141,22 @@ def main():  # pragma: no cover
     if args.std:
         data['std'] = args.std
 
-    # Give data to ConvertData()
-    data_converter = DataConverter(data)
-    data_converter.init_files(args.project, args.cmake)
-    data_converter.create_data()
-
-    # Close CMake file
-    data_converter.close_cmake_file()
+    if not args.solution:
+        cmake_lists_path = os.path.dirname(args.project)
+        if args.cmake:
+            cmake_lists_path = args.cmake
+        convert_project(data, args.project, cmake_lists_path)
+    else:
+        sln = open(args.solution)
+        slnpath = os.path.dirname(args.solution)
+        p = re.compile(r', "(.*\.vcxproj)"')
+        projects = p.findall(sln.read())
+        sln.close()
+        for project in projects:
+            project = '/'.join(project.split('\\'))
+            project_abs = os.path.join(slnpath, project)
+            convert_project(data, project_abs, os.path.dirname(project_abs))
+            print('\n')
 
 
 if __name__ == "__main__":  # pragma: no cover

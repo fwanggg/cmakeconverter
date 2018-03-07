@@ -50,32 +50,30 @@ class TestProjectFiles(unittest2.TestCase):
 
         under_test = ProjectFiles(self.data_test)
 
-        self.assertTrue(under_test.c_folder_nb)
-        self.assertTrue(under_test.h_folder_nb)
-
         self.assertTrue(under_test.tree)
         self.assertTrue(under_test.ns)
         self.assertTrue(under_test.cmake)
         self.assertTrue(under_test.cppfiles)
         self.assertTrue(under_test.headerfiles)
 
-    def test_write_variables(self):
-        """Write Files Variables"""
+        self.assertFalse(under_test.language)
+        self.assertFalse(under_test.sources)
+        self.assertFalse(under_test.headers)
+
+    def test_collects_source_files(self):
+        """Collects Source Files"""
 
         self.data_test['cmake'] = get_cmake_lists(self.cur_dir)
         under_test = ProjectFiles(self.data_test)
 
-        under_test.write_files_variables()
+        self.assertFalse(under_test.sources)
+        self.assertFalse(under_test.headers)
 
+        under_test.collects_source_files()
         self.data_test['cmake'].close()
 
-        cmakelists_test = open('%s/CMakeLists.txt' % self.cur_dir, 'r')
-        content_test = cmakelists_test.read()
-
-        self.assertTrue('CPP_DIR_1' in content_test)
-        self.assertTrue('HEADER_DIR_1' in content_test)
-
-        cmakelists_test.close()
+        self.assertTrue(under_test.sources)
+        self.assertTrue(under_test.headers)
 
     def test_write_source_files(self):
         """Write Source Files"""
@@ -83,17 +81,16 @@ class TestProjectFiles(unittest2.TestCase):
         self.data_test['cmake'] = get_cmake_lists(self.cur_dir)
         under_test = ProjectFiles(self.data_test)
 
-        under_test.write_files_variables()
+        under_test.collects_source_files()
         under_test.write_source_files()
 
         self.data_test['cmake'].close()
 
-        cmakelists_test = open('%s/CMakeLists.txt' % self.cur_dir, 'r')
+        cmakelists_test = open('%s/CMakeLists.txt' % self.cur_dir)
         content_test = cmakelists_test.read()
 
-        self.assertTrue('GLOB SRC_FILES' in content_test)
-        self.assertTrue('CPP_DIR_1' in content_test)
-        self.assertTrue('HEADER_DIR_1' in content_test)
+        self.assertTrue('source_group("Sources" FILES ${SRC_FILES})' in content_test)
+        self.assertTrue('source_group("Headers" FILES ${HEADERS_FILES})' in content_test)
 
     def test_add_additional_code(self):
         """Add Additional CMake Code"""
@@ -106,7 +103,7 @@ class TestProjectFiles(unittest2.TestCase):
 
         under_test.cmake.close()
 
-        cmakelists_test = open('%s/CMakeLists.txt' % self.cur_dir, 'r')
+        cmakelists_test = open('%s/CMakeLists.txt' % self.cur_dir)
         content_test = cmakelists_test.read()
 
         self.assertEqual('', content_test)
@@ -118,7 +115,7 @@ class TestProjectFiles(unittest2.TestCase):
 
         under_test.cmake.close()
 
-        cmakelists_test = open('%s/CMakeLists.txt' % self.cur_dir, 'r')
+        cmakelists_test = open('%s/CMakeLists.txt' % self.cur_dir)
         content_test = cmakelists_test.read()
 
         self.assertTrue('set(ADD_CODE code)' in content_test)
@@ -131,7 +128,7 @@ class TestProjectFiles(unittest2.TestCase):
 
         under_test.cmake.close()
 
-        cmakelists_add_test = open('%s/CMakeLists.txt' % self.cur_dir, 'r')
+        cmakelists_add_test = open('%s/CMakeLists.txt' % self.cur_dir)
         content_add_test = cmakelists_add_test.read()
 
         self.assertEqual('', content_add_test)
@@ -144,11 +141,12 @@ class TestProjectFiles(unittest2.TestCase):
         self.data_test['cmake'] = get_cmake_lists(self.cur_dir)
         under_test = ProjectFiles(self.data_test)
 
+        under_test.collects_source_files()
         under_test.add_target_artefact()
 
         self.data_test['cmake'].close()
 
-        cmakelists_test = open('%s/CMakeLists.txt' % self.cur_dir, 'r')
+        cmakelists_test = open('%s/CMakeLists.txt' % self.cur_dir)
         content_test = cmakelists_test.read()
 
         self.assertTrue('add_library(${PROJECT_NAME} SHARED' in content_test)

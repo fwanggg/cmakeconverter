@@ -64,7 +64,7 @@ class TestDependencies(unittest2.TestCase):
         under_test.write_include_dir()
         self.data_test['cmake'].close()
 
-        cmakelists_test = open('CMakeLists.txt', 'r')
+        cmakelists_test = open('CMakeLists.txt')
 
         self.assertTrue(
             'include_directories(../../../external/g3log/latest/src)' in cmakelists_test.read()
@@ -81,13 +81,13 @@ class TestDependencies(unittest2.TestCase):
         under_test.write_dependencies()
         self.data_test['cmake'].close()
 
-        cmakelists_test = open('CMakeLists.txt', 'r')
+        cmakelists_test = open('CMakeLists.txt')
         content_test = cmakelists_test.read()
 
         self.assertTrue(
-            'add_subdirectory(platform/cmake/g3log ${CMAKE_BINARY_DIR}/g3log' in content_test)
+            'add_subdirectory(test_files/cmake-g3log ${CMAKE_BINARY_DIR}/g3log)' in content_test)
         self.assertTrue(
-            'add_subdirectory(platform/cmake/zlib ${CMAKE_BINARY_DIR}/zlib' in content_test)
+            'add_subdirectory(test_files/cmake-zlib ${CMAKE_BINARY_DIR}/zlib)' in content_test)
 
         cmakelists_test.close()
 
@@ -99,7 +99,7 @@ class TestDependencies(unittest2.TestCase):
         under_test.write_dependencies()
         self.data_test['cmake'].close()
 
-        cmakelists_test = open('CMakeLists.txt', 'r')
+        cmakelists_test = open('CMakeLists.txt')
         content_test = cmakelists_test.read()
 
         self.assertTrue(
@@ -118,7 +118,7 @@ class TestDependencies(unittest2.TestCase):
         under_test.link_dependencies()
         self.data_test['cmake'].close()
 
-        cmakelists_test = open('CMakeLists.txt', 'r')
+        cmakelists_test = open('CMakeLists.txt')
 
         self.assertTrue('target_link_libraries(${PROJECT_NAME}' in cmakelists_test.read())
 
